@@ -1,9 +1,4 @@
-# Primary Application Packages
 streamlit
 transformers
 torch
 PyMuPDF
-
-# PyTorch dependencies (may be listed here depending on your install)
-numpy
-filelock
