@@ -1,18 +1,59 @@
-# app.py
-
 import streamlit as st
 import fitz  # PyMuPDF
 from transformers import pipeline
 import re
-import os
 import tempfile
+import os
 
-# Initialize the AI Summarizer (BART is excellent for this)
-# This model will download the first time you run the script.
+# 1. Setup Page Config
+st.set_page_config(page_title="AI Research Brief", page_icon="📄")
+
+# 2. Load the lightest model for deployment stability
 @st.cache_resource
-def load_summarizer():
-    # We switch to a distilled model which is ~300MB instead of 1.6GB
-    return pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+def load_model():
+    # T5-small is ~242MB, perfect for free-tier hosting
+    return pipeline("summarization", model="t5-small")
 
-SUMMARIZER = load_summarizer()
-MAX_CHUNK_SIZE = 1000  # Token limit for BART model input
+summarizer = load_model()
+
+def extract_text(file_path):
+    text = ""
+    with fitz.open(file_path) as doc:
+        for page in doc:
+            text += page.get_text()
+    # Simple cleanup
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def generate_summary(text):
+    # T5 needs this prefix
+    input_text = "summarize: " + text
+    # Standard research papers are long, so we take the first 3000 chars 
+    # to avoid memory crashes on the free tier
+    truncated_text = input_text[:3000] 
+    
+    summary = summarizer(truncated_text, max_length=150, min_length=50, do_sample=False)
+    return summary[0]['summary_text']
+
+# 3. UI Layout
+st.title("📄 AI Research Paper Briefing")
+st.write("Upload a PDF to get a quick AI summary.")
+
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+
+if uploaded_file:
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(uploaded_file.read())
+        path = tmp.name
+
+    if st.button("Generate Brief"):
+        with st.spinner("Analyzing paper..."):
+            raw_text = extract_text(path)
+            if len(raw_text) > 100:
+                result = generate_summary(raw_text)
+                st.subheader("Summary")
+                st.success(result)
+            else:
+                st.error("Could not read enough text from PDF.")
+    
+    os.unlink(path)
