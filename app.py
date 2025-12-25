@@ -11,8 +11,8 @@ st.set_page_config(page_title="AI Research Brief", page_icon="📄")
 # 2. Load the lightest model for deployment stability
 @st.cache_resource
 def load_model():
-    # T5-small is ~242MB, perfect for free-tier hosting
-    return pipeline("summarization", model="t5-small")
+    # 't5-base' is smarter than 't5-small' but still fits in Streamlit memory
+    return pipeline("summarization", model="t5-base")
 
 summarizer = load_model()
 
@@ -26,13 +26,18 @@ def extract_text(file_path):
     return text
 
 def generate_summary(text):
-    # T5 needs this prefix
     input_text = "summarize: " + text
-    # Standard research papers are long, so we take the first 3000 chars 
-    # to avoid memory crashes on the free tier
-    truncated_text = input_text[:3000] 
+    # Increase the character limit slightly to give the AI more context
+    truncated_text = input_text[:4000] 
     
-    summary = summarizer(truncated_text, max_length=150, min_length=50, do_sample=False)
+    summary = summarizer(
+        truncated_text, 
+        max_length=300,    # Increase this for a longer summary
+        min_length=100,    # Set a minimum length so it's not too short
+        length_penalty=2.0, 
+        num_beams=4,       # Beam search helps produce higher quality text
+        early_stopping=True
+    )
     return summary[0]['summary_text']
 
 # 3. UI Layout
@@ -57,3 +62,4 @@ if uploaded_file:
                 st.error("Could not read enough text from PDF.")
     
     os.unlink(path)
+
